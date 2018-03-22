@@ -11,14 +11,19 @@ except:
 
 
 data = {
-            "pulse_static": {"settings": "loops:1, framedelay:2, pfunc:interp,start"},
-            "pulse_changer": {"settings": "framedelay:5, loop, pfunc:interp,start"}
+            "pulse": {"settings": "framedelay:5, loop, pfunc:interp,start"}
        }
 
-def get_delta(start, end, color):
-    if start[color] == end[color]:
-        return 0
-    return 1
+def get_delta(start, end, delta_factor):
+    deltas = {k: abs(end[k] - start[k]) for k in start.keys()}
+    smallest = min(deltas.items(), key=lambda x: x[1])
+    for k in deltas.keys():
+        val = int(deltas[k]/smallest[1])
+        if val <= 0:
+            val = 1
+        val *= delta_factor
+        deltas[k] = val
+    return deltas
 
 def create_frames(start, end, color_deltas):
     frames = []
@@ -26,79 +31,49 @@ def create_frames(start, end, color_deltas):
     current = copy(start)
     deltas = copy(color_deltas)
     while current != end:
-        frame = {'R': 0, 'G': 0, 'B': 0, 'RP': True, 'GP': True, 'BP': True}
-        reverse = {'R': 0, 'G': 0, 'B': 0, 'RP': False, 'GP': False, 'BP': False}
+        frames.append(copy(current))
         for key in ['R', 'G', 'B']:
-            frame[key + 'C'] = current[key]
             if current[key] == end[key]:
                 deltas[key] = 0
-                frame[key + 'P'] = True
-                reverse[key + 'P'] = False
             elif current[key] < end[key]:
                 while deltas[key] > 0 and current[key] + deltas[key] > end[key]:
                     deltas[key] -= 1
                 current[key] += deltas[key]
-                frame[key + 'P'] = True
-                reverse[key + 'P'] = False
             else:
                 while deltas[key] > 0 and current[key] - deltas[key] < end[key]:
                     deltas[key] -= 1
                 current[key] -= deltas[key]
-                frame[key + 'P'] = False
-                reverse[key + 'P'] = True
-            frame[key] = deltas[key]
-            reverse[key] = deltas[key]
-            reverse[key + 'C'] = current[key]
-        frames.append(frame)
-        reverse_frames.insert(0, reverse)
+        reverse_frames.insert(0, copy(current))
     return frames + reverse_frames
 
 def write_frames(frames, key=None):
     if key:
-        static = 'P[{K}](+:{{RC}},+:{{GC}},+:{{BC}})'.format(K=key)
-        pulse = 'P[{K}]({{RS}}:{{R}},{{GS}}:{{G}},{{BS}}:{{B}})'.format(K=key)
+        pulse = 'P[{K}]({{R}},{{G}},{{B}})'.format(K=key)
     else:
-        static = 'P[c:-10%](+:{RC},+:{GC},+:{BC}), P[c:110%](+:{RC},+:{GC},+:{BC})'
-        pulse = 'P[c:-10%]({RS}:{R},{GS}:{G},{BS}:{B}), P[c:110%]({RS}:{R},{GS}:{G},{BS}:{B})'
-    return static.format(**frames[0]), [pulse.format(RS='+' if frame['RP'] else '-', GS='+' if frame['GP'] else '-', BS='+' if frame['BP'] else '-', **frame) for frame in frames]
+        pulse = 'P[c:-10%]({R},{G},{B}), P[c:110%]({R},{G},{B})'
+    return [pulse.format(**frame) for frame in frames]
 
 def create_pulse(start, end, color_deltas, random=False):
     frames = create_frames(start, end, color_deltas)
 
     if not random:
-        static, pulse = write_frames(frames)
-        return [static], pulse
+        pulse = write_frames(frames)
+        return pulse
 
     random_frames = {}
-    static_frames = []
     for k in range(1, 120):
         start = randint(0, len(frames) - 1)
-        if k == 1:
-            check(frames[start:] + frames[:start])
-        static, pulse = write_frames(frames[start:] + frames[:start], key=k)
-        static_frames.append(static)
+        pulse = write_frames(frames[start:] + frames[:start], key=k)
         random_frames[k] = pulse
-    return static_frames, [','.join(filter(None, frame)) for frame in zip_longest(*random_frames.values(), fillvalue='')]
-
-def check(frames):
-    curr = {'R': frames[0]['RC'], 'G': frames[0]['GC'], 'B': frames[0]['BC']}
-    print(curr['R'], curr['G'], curr['B'])
-    for f in frames:
-        for k in curr.keys():
-            if f[k + 'P']:
-                curr[k] += f[k]
-            else:
-                curr[k] -= f[k]
-        print(curr['R'], curr['G'], curr['B'])
+    return [','.join(filter(None, frame)) for frame in zip_longest(*random_frames.values(), fillvalue='')]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create a pulse rgb animation for the K-Type')
     parser.add_argument('color_a', type=str)
     parser.add_argument('color_b', type=str)
     parser.add_argument('--random', action='store_true', help='Start each key at a random color on the spectrum')
-    parser.add_argument('-r', '--r-delta', type=int, help='Delta for R value in RGB')
-    parser.add_argument('-g', '--g-delta', type=int, help='Delta for G value in RGB')
-    parser.add_argument('-b', '--b-delta', type=int, help='Delta for B value in RGB')
+    parser.add_argument('-d', '--deltas', type=int, help='Delta values for RGB', nargs=3, metavar=('r_delta', 'g_delta', 'b_delta'))
+    parser.add_argument('-f', '--delta-factor', type=int, help='Delta factor to multiply default deltas by', default=1)
     args = parser.parse_args()
 
     color_a = args.color_a.split(',')
@@ -106,14 +81,14 @@ if __name__ == '__main__':
     color_b = args.color_b.split(',')
     color_b = {'R': int(color_b[0].strip()), 'G': int(color_b[1].strip()), 'B': int(color_b[2].strip())}
 
-    deltas = {'R': get_delta(color_a, color_b, 'R') if not args.r_delta else abs(args.r_delta),
-              'G': get_delta(color_a, color_b, 'G') if not args.g_delta else abs(args.g_delta),
-              'B': get_delta(color_a, color_b, 'B') if not args.b_delta else abs(args.b_delta)}
+    if args.deltas:
+        deltas = dict(zip(['R', 'G', 'B'], args.deltas))
+    else:
+        deltas = get_delta(color_a, color_b, args.delta_factor)
 
-    static, pulse = create_pulse(color_a, color_b, deltas, random=args.random)
+    pulse = create_pulse(color_a, color_b, deltas, random=args.random)
 
-    data['pulse_static']['frames'] = static
-    data['pulse_changer']['frames'] = pulse
+    data['pulse']['frames'] = pulse
     filename = 'pulse_animation_{R}_{G}_{B}__{{R}}_{{G}}_{{B}}.json'.format(**color_a).format(**color_b)
     with open(os.path.join(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Animations'), filename), 'w') as file:
         json.dump(data, file, indent=4)
