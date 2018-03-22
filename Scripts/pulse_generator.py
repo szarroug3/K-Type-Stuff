@@ -11,7 +11,7 @@ except:
 
 
 data = {
-            "pulse": {"settings": "framedelay:5, loop, pfunc:interp,start"}
+            "pulse": {"settings": "framedelay:2, loop, start"}
        }
 
 def get_delta(start, end, delta_factor):

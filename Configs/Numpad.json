@@ -156,10 +156,6 @@
                 "0": {
                     "key": "F7",
                     "label": "F7"
-                },
-                "2": {
-                    "key": "V",
-                    "label": "V"
                 }
             },
             "triggers": {
