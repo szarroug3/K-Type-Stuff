@@ -1,0 +1,17 @@
+{
+    "fingerprints": {
+        "settings": "framedelay:5, framestretch, loops:1",
+        "type": "reaction",
+        "frames": [
+            "P[r:i,c:i](255,0,0)",
+            "P[r:i,c:i](255,0,0)",
+            "P[r:i,c:i](255,0,0)",
+            "P[r:i,c:i](215,20,40)",
+            "P[r:i,c:i](175,40,80)",
+            "P[r:i,c:i](135,60,120)",
+            "P[r:i,c:i](111,70,160)",
+            "P[r:i,c:i](111,70,165)",
+            "P[r:i,c:i](111,70,160)"
+        ]
+    }
+}
